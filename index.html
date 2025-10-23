@@ -1,251 +1,438 @@
-// Mailinblack – Scoring & Bundling Engine v2.3 (no U-Cyber)
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mailinblack • Recommandateur de Bundles v2.3</title>
+  <style>
+    :root{
+      --bg:#0f1226;--card:#14183a;--ink:#eef1ff;--muted:#9aa3c7;--accent:#8b9bff;--good:#00d19a;--warn:#ffb547;--bad:#ff6b6b;
+      --chip:#2a2f59;--chip-on:#3a4080;--border:#2a2f59;--shadow:0 10px 30px rgba(0,0,0,.35)
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu;line-height:1.35;background:radial-gradient(1200px 600px at 15% -10%,#1b2253,transparent),radial-gradient(1000px 800px at 90% -10%,#1c2740,transparent),var(--bg);color:var(--ink)}
+    h1{font-size:clamp(20px,2.6vw,32px);margin:0 0 6px}
+    h2{font-size:18px;margin:0 0 12px;color:var(--ink)}
+    p{color:var(--muted)}
+    .wrap{max-width:1100px;margin:32px auto;padding:0 16px}
+    .grid{display:grid;gap:16px;grid-template-columns:1.15fr 1fr}
+    @media (max-width:980px){.grid{grid-template-columns:1fr}}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.00));border:1px solid var(--border);border-radius:18px;padding:16px;box-shadow:var(--shadow)}
+    .inputs{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .inputs .full{grid-column:1/-1}
+    label{font-size:13px;color:var(--muted);display:block;margin:4px 0}
+    select,button,.pill{appearance:none;border:1px solid var(--border);background:#0f1331;color:var(--ink);padding:10px 12px;border-radius:12px;width:100%}
+    select:focus,button:focus{outline:2px solid var(--accent)}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .pill{display:inline-flex;gap:8px;align-items:center;cursor:pointer;border-color:#1f2450;background:var(--chip)}
+    .pill[data-active="true"]{background:var(--chip-on);border-color:var(--accent)}
+    .pill input{accent-color:var(--accent)}
+    .muted{color:var(--muted)}
+    .btn{background:linear-gradient(180deg,#4b59ff,#7a86ff);border:none;color:white;font-weight:600;cursor:pointer}
+    .btn.secondary{background:#1a1f46;border:1px solid #2a3175;color:#c6cdff}
+    .btn.ghost{background:transparent;border:1px dashed #3a4080;color:#c6cdff}
+    .btn:active{transform:translateY(1px)}
+    .split{display:flex;gap:8px}
+    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px}
+    .kpi{background:var(--chip);border:1px solid var(--border);border-radius:14px;padding:10px;text-align:center}
+    .kpi .val{font-weight:800;font-size:18px}
+    .tags{display:flex;flex-wrap:wrap;gap:8px}
+    .tag{background:#1a1f46;border:1px solid #2a3175;color:#c6cdff;border-radius:999px;padding:6px 10px;font-size:12px}
+    .list{display:grid;gap:10px}
+    .item{background:var(--chip);border:1px solid var(--border);border-radius:14px;padding:14px}
+    .item h3{margin:0 0 6px;font-size:16px}
+    .reasons{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+    .reason{font-size:12px;color:var(--muted);background:#141a3f;border:1px solid #2a3175;border-radius:999px;padding:3px 8px}
+    .scorebar{height:9px;background:#10153a;border-radius:999px;border:1px solid #2a3175;overflow:hidden;margin-top:8px}
+    .scorebar > span{display:block;height:100%;background:linear-gradient(90deg,#5dd9b6,#4b59ff);width:0%}
+    .heat{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:8px}
+    .cell{height:22px;border-radius:6px;background:#141a3f;border:1px solid #2a3175;position:relative}
+    .cell::after{content:"";position:absolute;inset:0;border-radius:6px;background:linear-gradient(180deg,rgba(255,255,255,.08),transparent);opacity:.6}
+    .cell[data-on="1"]{background:linear-gradient(180deg,rgba(93,217,182,.25),rgba(75,89,255,.15))}
+    .hint{font-size:12px;color:var(--muted)}
+    .footer{margin-top:20px;color:var(--muted);font-size:12px}
+    .preset{display:flex;flex-wrap:wrap;gap:8px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div style="margin-bottom:16px">
+      <h1>🔮 Recommandateur de Bundles – Mailinblack v2.3</h1>
+      <p class="muted">Sélectionne le contexte client, clique sur <b>Recommander</b> et obtiens un bundle <i>expliqué</i> (scores, raisons, effort, incentives). Version démo autonome – pas de dépendances.</p>
+    </div>
 
-type Secteur = "Santé"|"Industrie"|"Finance"|"Éducation"|"Administration"|"Commerce"|"BTP"|"Transport"|"Énergie"|"Autre";
-type Taille = "1-10"|"11-50"|"51-100"|"101-250"|"250-1000"|"1000+";
-type Maturite = "Faible"|"Moyenne"|"Élevée";
-type Budget = "Faible"|"Moyen"|"Élevé";
-type PainPoint = "Phishing"|"Fraude"|"Conformité"|"Accès partagés"|"Sensibilisation"|"Gouvernance"|"Ransomware"|"Rotation personnel";
+    <div class="grid">
+      <!-- LEFT: FORM -->
+      <div class="card">
+        <h2>Contexte client</h2>
+        <div class="inputs">
+          <div>
+            <label>Secteur</label>
+            <select id="secteur">
+              <option>Santé</option><option>Industrie</option><option>Finance</option><option>Éducation</option><option>Administration</option><option>Commerce</option><option>BTP</option><option>Transport</option><option>Énergie</option><option>Autre</option>
+            </select>
+          </div>
+          <div>
+            <label>Taille de l'entreprise</label>
+            <select id="taille">
+              <option>1-10</option><option>11-50</option><option>51-100</option><option>101-250</option><option>250-1000</option><option>1000+</option>
+            </select>
+          </div>
+          <div>
+            <label>Maturité cyber</label>
+            <select id="maturite"><option>Faible</option><option>Moyenne</option><option>Élevée</option></select>
+          </div>
+          <div>
+            <label>Budget</label>
+            <select id="budget"><option>Faible</option><option>Moyen</option><option>Élevé</option></select>
+          </div>
+          <div>
+            <label>Contraintes réglementaires</label>
+            <select id="reg"><option>Non</option><option>Oui</option></select>
+          </div>
+          <div>
+            <label>Multi-sites / Prestataires</label>
+            <select id="multi"><option>Non</option><option>Oui</option></select>
+          </div>
+          <div class="full">
+            <label>Pain points (sélection multiple)</label>
+            <div class="row" id="pains"></div>
+            <div class="hint">Astuce : clique pour (dé)sélectionner.</div>
+          </div>
+          <div class="full">
+            <label>Filtrage mail existant</label>
+            <select id="filtre"><option>Non</option><option>Oui</option></select>
+          </div>
+          <div class="full split">
+            <button class="btn" id="run">⚡ Recommander</button>
+            <button class="btn secondary" id="reset">↻ Réinitialiser</button>
+            <button class="btn ghost" id="copy">⧉ Copier la sortie</button>
+          </div>
+          <div class="full">
+            <div class="preset">
+              <button class="btn ghost" data-preset="sante-mid">Preset Santé 101–250</button>
+              <button class="btn ghost" data-preset="industrie-pti">Preset Industrie 11–50</button>
+              <button class="btn ghost" data-preset="public-large">Preset Administration 1000+</button>
+            </div>
+          </div>
+        </div>
+      </div>
 
-export interface InputCtx {
-  secteur: Secteur;
-  tailleEntreprise: Taille;
-  maturiteCyber: Maturite;
-  budget: Budget;
-  contraintesReglementaires: boolean;
-  multiSitesOuPrestataires: boolean;
-  painPoints: PainPoint[];
-  filtrageMailExistant: boolean;
+      <!-- RIGHT: OUTPUT -->
+      <div class="card">
+        <h2>Résultats</h2>
+        <div class="kpis">
+          <div class="kpi"><div class="val" id="kBundle">–</div><div class="muted">Bundle cible</div></div>
+          <div class="kpi"><div class="val" id="kEffort">–</div><div class="muted">Effort total</div></div>
+          <div class="kpi"><div class="val" id="kConf">–</div><div class="muted">Confiance</div></div>
+          <div class="kpi"><div class="val" id="kIncent">–</div><div class="muted">Incentives</div></div>
+        </div>
+
+        <h3 style="margin-top:14px">Produits recommandés</h3>
+        <div class="tags" id="recos"></div>
+
+        <h3 style="margin-top:14px">Détail des scores</h3>
+        <div class="list" id="scores"></div>
+      </div>
+    </div>
+
+    <div class="footer">v2.3 – Logique : exclusivité Essential/Advanced, plafond par budget, gating par effort, Sikker conditionnel prestataires (1000+), forçages sensibilisation.</div>
+  </div>
+
+<script>
+// ========= ENGINE (identique à la version TS mais en JS pur) =========
+const inArr=(arr,...vals)=>vals.some(v=>arr.includes(v));
+const segOf=t=> (t==="1-10"||t==="11-50")?"1-50":(t==="51-100"||t==="101-250")?"51-250":(t==="250-1000")?"251-1000":"1000+";
+const Effort={Essential:.5,Coach:.5,Sikker:1.0,Advanced:1.5,Academy:1.0};
+const ThresholdEffort={"1-50":2.0,"51-250":3.0,"251-1000":3.5,"1000+":3.5};
+const MaxProductsByBudget={"Faible":2,"Moyen":3,"Élevé":3};
+const BundleTargetBySeg={"1-50":2,"51-250":3,"251-1000":3,"1000+":3};
+
+function scoreEssential(c){let s=0,r=[];
+  if(["1-10","11-50"].includes(c.tailleEntreprise)){s+=3;r.push("Taille≤50");}
+  if(["BTP","Commerce","Transport","Industrie"].includes(c.secteur)){s+=2;r.push("Secteur volume");}
+  if(c.maturiteCyber==="Faible"){s+=2;r.push("Maturité faible");}
+  if(c.budget==="Faible"){s+=2;r.push("Budget faible");}
+  if(inArr(c.painPoints,"Phishing","Fraude")){s+=1;r.push("Phishing/Fraude");}
+  if(!c.multiSitesOuPrestataires){s+=1;r.push("Mono-site");}
+  if(["101-250","250-1000","1000+"].includes(c.tailleEntreprise)){s-=3;r.push("≥101: sous-dimensionné");}
+  if(c.maturiteCyber==="Élevée"){s-=2;r.push("Maturité élevée");}
+  if(c.contraintesReglementaires){s-=1;r.push("Contraintes");}
+  if(c.contraintesReglementaires && ["51-100","101-250","250-1000","1000+"].includes(c.tailleEntreprise)){s-=2;r.push("Réglementaire & ≥51");}
+  if(c.filtrageMailExistant){s-=3;r.push("Filtrage existant");}
+  const seg=segOf(c.tailleEntreprise); if(seg==="1-50") s+=1; if(seg==="251-1000") s-=1; if(seg==="1000+") s-=2;
+  return {score:s,reasons:r};}
+
+function scoreAdvanced(c){let s=0,r=[];
+  if(["101-250","250-1000","1000+"].includes(c.tailleEntreprise)){s+=3;r.push("Taille mid/large");}
+  if(["Santé","Finance","Éducation","Administration","Énergie"].includes(c.secteur)){s+=3;r.push("Secteur critique");}
+  if(c.contraintesReglementaires){s+=3;r.push("Contraintes");}
+  if(c.maturiteCyber==="Élevée"){s+=2;r.push("Maturité élevée");}
+  if(inArr(c.painPoints,"Gouvernance","Ransomware")){s+=2;r.push("Gov/Ransomware");}
+  if(c.multiSitesOuPrestataires){s+=1;r.push("Multi-sites");}
+  if(["1-10","11-50"].includes(c.tailleEntreprise)){s-=3;r.push("≤50: surdimensionné");}
+  if(c.budget==="Faible"){s-=2;r.push("Budget faible");}
+  if(c.filtrageMailExistant){s-=3;r.push("Filtrage existant");}
+  const seg=segOf(c.tailleEntreprise); if(seg==="51-250") s+=1; if(seg==="251-1000"||seg==="1000+") s+=2;
+  if(c.secteur==="Finance"){s+=1;r.push("Finance:+1");}
+  return {score:s,reasons:r};}
+
+function scoreCoach(c){let s=0,r=[];
+  if(inArr(c.painPoints,"Phishing","Fraude","Sensibilisation")){s+=3;r.push("Phishing/Fraude/Sensibilisation");}
+  if(c.contraintesReglementaires){s+=3;r.push("Conformité");}
+  if(["Santé","Finance","Administration","Éducation","Commerce","BTP"].includes(c.secteur)){s+=2;r.push("Secteur prioritaire");}
+  if(["Moyenne","Élevée"].includes(c.maturiteCyber)){s+=2;r.push("Maturité ok");}
+  if(c.tailleEntreprise!=="1-10"){s+=1;r.push("≥11 employés");}
+  if(c.budget==="Moyen"){s+=1;r.push("Budget moyen");}
+  if((c.secteur==="BTP"||c.secteur==="Commerce") && ["1-10","11-50"].includes(c.tailleEntreprise)){s+=1;r.push("PME terrain");}
+  if(c.filtrageMailExistant){s+=1;r.push("Complément filtrage");}
+  if(c.budget==="Faible" && c.tailleEntreprise==="1-10" && !c.contraintesReglementaires){s-=2;r.push("TPE budget faible");}
+  const seg=segOf(c.tailleEntreprise); if(seg==="51-250"||seg==="251-1000") s+=1; if(["Santé","Administration","Éducation"].includes(c.secteur)) s+=1;
+  return {score:s,reasons:r};}
+
+function scoreSikker(c){let s=0,r=[];
+  if(c.multiSitesOuPrestataires){s+=3;r.push("Multi-sites/Prestataires");}
+  if(inArr(c.painPoints,"Accès partagés","Rotation personnel")){s+=3;r.push("Accès partagés/Rotation");}
+  if(["Industrie","Commerce","BTP","Éducation","Transport"].includes(c.secteur)){s+=2;r.push("Secteur accès partagés");}
+  if(["1-10","11-50","51-100","101-250"].includes(c.tailleEntreprise)){s+=2;r.push("≤250: IAM light");}
+  if(c.maturiteCyber==="Moyenne"){s+=1;r.push("Maturité moyenne");}
+  if(c.budget==="Faible"){s-=1;r.push("Budget faible");}
+  if(inArr(c.painPoints,"Gouvernance")){s+=1;r.push("Gouvernance");}
+  if(c.tailleEntreprise==="1000+"){s-=2;r.push("1000+: IAM existant"); if(c.multiSitesOuPrestataires){s+=2;r.push("Prestataires: ok");}}
+  const seg=segOf(c.tailleEntreprise); if(seg==="51-250"||seg==="251-1000") s+=2; if(seg==="1000+") s+=1;
+  if(["Santé","Administration"].includes(c.secteur)){s+=1;r.push("Santé/Public:+1");}
+  return {score:s,reasons:r};}
+
+function scoreAcademy(c){let s=0,r=[];
+  if(c.contraintesReglementaires){s+=3;r.push("Conformité");}
+  if(["Finance","Santé","Éducation","Administration","Énergie"].includes(c.secteur)){s+=3;r.push("Secteur régulé");}
+  if(["Moyenne","Élevée"].includes(c.maturiteCyber)){s+=2;r.push("Maturité ok");}
+  if(!["1-10","11-50"].includes(c.tailleEntreprise)){s+=2;r.push("≥51 employés");}
+  if(inArr(c.painPoints,"Conformité","Sensibilisation")){s+=1;r.push("Conformité/Sensibilisation");}
+  if(c.filtrageMailExistant){s+=1;r.push("Complément filtrage");}
+  if(c.secteur==="Éducation"){s+=1;r.push("Éducation:+1");}
+  if(c.tailleEntreprise==="1-10"){s-=2;r.push("TPE: chronophage");}
+  if(c.budget==="Faible"){s-=2;r.push("Budget faible");}
+  if((c.secteur==="BTP"||c.secteur==="Commerce") && ["1-10","11-50"].includes(c.tailleEntreprise)){s-=1;r.push("BTP/Commerce≤50");}
+  const seg=segOf(c.tailleEntreprise); if(seg!=="1-50") s+=1; if(["Santé","Administration"].includes(c.secteur)) s+=1;
+  return {score:s,reasons:r};}
+
+function applyVerticalTweaks(S,R,c){
+  if(["Santé","Administration"].includes(c.secteur)){S.Coach+=1;R.Coach.push("Vertical:+1 Coach");S.Academy+=1;R.Academy.push("Vertical:+1 Academy");S.Sikker+=1;R.Sikker.push("Vertical:+1 Sikker");}
+  if(c.secteur==="Industrie"){S.Sikker+=2;R.Sikker.push("Industrie:+2");S.Coach+=1;R.Coach.push("Industrie:+1");}
+  if(c.secteur==="Finance"){S.Advanced+=1;R.Advanced.push("Finance:+1");S.Coach+=1;R.Coach.push("Finance:+1");S.Academy+=1;R.Academy.push("Finance:+1");}
+  if(c.secteur==="Éducation"){S.Academy+=1;R.Academy.push("Éducation:+1");S.Coach+=1;R.Coach.push("Éducation:+1");}
+  if(c.secteur==="BTP"||c.secteur==="Commerce"){S.Academy-=1;R.Academy.push("BTP/Commerce:-1");S.Coach+=1;R.Coach.push("BTP/Commerce:+1");}
+  if(c.secteur==="Énergie"){S.Advanced+=1;R.Advanced.push("Énergie:+1");S.Academy+=1;R.Academy.push("Énergie:+1");}
 }
 
-export interface Output {
-  produitsRecommandes: string[];
-  bundleCible: number;
-  scores: Record<string, number>;
-  raisons: Record<string, string[]>;
-  confidence: number;
-  effortTotal: number;
-  incentives: string[];
-}
-
-const inArr = (arr: string[], ...vals: string[]) => vals.some(v => arr.includes(v));
-const segOf = (t: Taille): "1-50"|"51-250"|"251-1000"|"1000+" => {
-  if (t==="1-10"||t==="11-50") return "1-50";
-  if (t==="51-100"||t==="101-250") return "51-250";
-  if (t==="250-1000") return "251-1000";
-  return "1000+";
-};
-
-const Effort = { Essential:0.5, Coach:0.5, Sikker:1.0, Advanced:1.5, Academy:1.0 };
-const ThresholdEffort = { "1-50":2.0, "51-250":3.0, "251-1000":3.5, "1000+":3.5 };
-const MaxProductsByBudget: Record<Budget, number> = { Faible:2, Moyen:3, Élevé:3 };
-const BundleTargetBySeg = { "1-50":2, "51-250":3, "251-1000":3, "1000+":3 };
-
-// --- Scorers
-function scoreEssential(c: InputCtx){ let s=0, r:string[]=[];
-  if (["1-10","11-50"].includes(c.tailleEntreprise)) { s+=3; r.push("Taille≤50"); }
-  if (["BTP","Commerce","Transport","Industrie"].includes(c.secteur)) { s+=2; r.push("Secteur volume"); }
-  if (c.maturiteCyber==="Faible") { s+=2; r.push("Maturité faible"); }
-  if (c.budget==="Faible") { s+=2; r.push("Budget faible"); }
-  if (inArr(c.painPoints,"Phishing","Fraude")) { s+=1; r.push("Phishing/Fraude"); }
-  if (!c.multiSitesOuPrestataires) { s+=1; r.push("Mono-site"); }
-
-  if (["101-250","250-1000","1000+"].includes(c.tailleEntreprise)) { s-=3; r.push("≥101: sous-dimensionné"); }
-  if (c.maturiteCyber==="Élevée") { s-=2; r.push("Maturité élevée"); }
-  if (c.contraintesReglementaires) { s-=1; r.push("Contraintes"); }
-  if (c.contraintesReglementaires && ["51-100","101-250","250-1000","1000+"].includes(c.tailleEntreprise)) {
-    s-=2; r.push("Réglementaire & ≥51");
-  }
-  if (c.filtrageMailExistant) { s-=3; r.push("Filtrage existant"); }
-
-  const seg=segOf(c.tailleEntreprise);
-  if (seg==="1-50") s+=1; if (seg==="251-1000") s-=1; if (seg==="1000+") s-=2;
-
-  return {score:s, reasons:r};
-}
-
-function scoreAdvanced(c: InputCtx){ let s=0, r:string[]=[];
-  if (["101-250","250-1000","1000+"].includes(c.tailleEntreprise)) { s+=3; r.push("Taille mid/large"); }
-  if (["Santé","Finance","Éducation","Administration","Énergie"].includes(c.secteur)) { s+=3; r.push("Secteur critique"); }
-  if (c.contraintesReglementaires) { s+=3; r.push("Contraintes"); }
-  if (c.maturiteCyber==="Élevée") { s+=2; r.push("Maturité élevée"); }
-  if (inArr(c.painPoints,"Gouvernance","Ransomware")) { s+=2; r.push("Gov/Ransomware"); }
-  if (c.multiSitesOuPrestataires) { s+=1; r.push("Multi-sites"); }
-
-  if (["1-10","11-50"].includes(c.tailleEntreprise)) { s-=3; r.push("≤50: surdimensionné"); }
-  if (c.budget==="Faible") { s-=2; r.push("Budget faible"); }
-  if (c.filtrageMailExistant) { s-=3; r.push("Filtrage existant"); }
-
-  const seg=segOf(c.tailleEntreprise);
-  if (seg==="51-250") s+=1; if (seg==="251-1000"||seg==="1000+") s+=2;
-  if (c.secteur==="Finance") { s+=1; r.push("Finance:+1"); }
-
-  return {score:s, reasons:r};
-}
-
-function scoreCoach(c: InputCtx){ let s=0, r:string[]=[];
-  if (inArr(c.painPoints,"Phishing","Fraude","Sensibilisation")) { s+=3; r.push("Phishing/Fraude/Sensibilisation"); }
-  if (c.contraintesReglementaires) { s+=3; r.push("Conformité"); }
-  if (["Santé","Finance","Administration","Éducation","Commerce","BTP"].includes(c.secteur)) { s+=2; r.push("Secteur prioritaire"); }
-  if (["Moyenne","Élevée"].includes(c.maturiteCyber)) { s+=2; r.push("Maturité ok"); }
-  if (!["1-10"].includes(c.tailleEntreprise)) { s+=1; r.push("≥11 employés"); }
-  if (c.budget==="Moyen") { s+=1; r.push("Budget moyen"); }
-  if ((c.secteur==="BTP"||c.secteur==="Commerce") && ["1-10","11-50"].includes(c.tailleEntreprise)) { s+=1; r.push("PME terrain"); }
-  if (c.filtrageMailExistant) { s+=1; r.push("Complément filtrage"); }
-  if (c.budget==="Faible" && c.tailleEntreprise==="1-10" && !c.contraintesReglementaires) { s-=2; r.push("TPE budget faible"); }
-  const seg=segOf(c.tailleEntreprise); if (seg==="51-250"||seg==="251-1000") s+=1;
-  if (["Santé","Administration","Éducation"].includes(c.secteur)) s+=1;
-  return {score:s, reasons:r};
-}
-
-function scoreSikker(c: InputCtx){ let s=0, r:string[]=[];
-  if (c.multiSitesOuPrestataires) { s+=3; r.push("Multi-sites/Prestataires"); }
-  if (inArr(c.painPoints,"Accès partagés","Rotation personnel")) { s+=3; r.push("Accès partagés/Rotation"); }
-  if (["Industrie","Commerce","BTP","Éducation","Transport"].includes(c.secteur)) { s+=2; r.push("Secteur accès partagés"); }
-  if (["1-10","11-50","51-100","101-250"].includes(c.tailleEntreprise)) { s+=2; r.push("≤250: IAM light"); }
-  if (c.maturiteCyber==="Moyenne") { s+=1; r.push("Maturité moyenne"); }
-  if (c.budget==="Faible") { s-=1; r.push("Budget faible"); }
-  if (inArr(c.painPoints,"Gouvernance")) { s+=1; r.push("Gouvernance"); }
-  if (c.tailleEntreprise==="1000+") { s-=2; r.push("1000+: IAM existant"); if (c.multiSitesOuPrestataires){ s+=2; r.push("Prestataires: ok"); } }
-  const seg=segOf(c.tailleEntreprise); if (seg==="51-250"||seg==="251-1000") s+=2; if (seg==="1000+") s+=1;
-  if (["Santé","Administration"].includes(c.secteur)) { s+=1; r.push("Santé/Public:+1"); }
-  return {score:s, reasons:r};
-}
-
-function scoreAcademy(c: InputCtx){ let s=0, r:string[]=[];
-  if (c.contraintesReglementaires) { s+=3; r.push("Conformité"); }
-  if (["Finance","Santé","Éducation","Administration","Énergie"].includes(c.secteur)) { s+=3; r.push("Secteur régulé"); }
-  if (["Moyenne","Élevée"].includes(c.maturiteCyber)) { s+=2; r.push("Maturité ok"); }
-  if (!["1-10","11-50"].includes(c.tailleEntreprise)) { s+=2; r.push("≥51 employés"); }
-  if (inArr(c.painPoints,"Conformité","Sensibilisation")) { s+=1; r.push("Conformité/Sensibilisation"); }
-  if (c.filtrageMailExistant) { s+=1; r.push("Complément filtrage"); }
-  if (c.secteur==="Éducation") { s+=1; r.push("Éducation:+1"); }
-  if (c.tailleEntreprise==="1-10") { s-=2; r.push("TPE: chronophage"); }
-  if (c.budget==="Faible") { s-=2; r.push("Budget faible"); }
-  if ((c.secteur==="BTP"||c.secteur==="Commerce") && ["1-10","11-50"].includes(c.tailleEntreprise)) { s-=1; r.push("BTP/Commerce≤50"); }
-  const seg=segOf(c.tailleEntreprise); if (seg!=="1-50") s+=1;
-  if (["Santé","Administration"].includes(c.secteur)) s+=1;
-  return {score:s, reasons:r};
-}
-
-// vertical tweaks (identiques à la version Notion)
-function applyVerticalTweaks(S:any, R:any, c:InputCtx){
-  if (["Santé","Administration"].includes(c.secteur)) {
-    S.Coach+=1; R.Coach.push("Vertical:+1 Coach");
-    S.Academy+=1; R.Academy.push("Vertical:+1 Academy");
-    S.Sikker+=1; R.Sikker.push("Vertical:+1 Sikker");
-  }
-  if (c.secteur==="Industrie"){ S.Sikker+=2; R.Sikker.push("Industrie:+2"); S.Coach+=1; R.Coach.push("Industrie:+1"); }
-  if (c.secteur==="Finance"){ S.Advanced+=1; R.Advanced.push("Finance:+1"); S.Coach+=1; R.Coach.push("Finance:+1"); S.Academy+=1; R.Academy.push("Finance:+1"); }
-  if (c.secteur==="Éducation"){ S.Academy+=1; R.Academy.push("Éducation:+1"); S.Coach+=1; R.Coach.push("Éducation:+1"); }
-  if (c.secteur==="BTP"||c.secteur==="Commerce"){ S.Academy-=1; R.Academy.push("BTP/Commerce:-1"); S.Coach+=1; R.Coach.push("BTP/Commerce:+1"); }
-  if (c.secteur==="Énergie"){ S.Advanced+=1; R.Advanced.push("Énergie:+1"); S.Academy+=1; R.Academy.push("Énergie:+1"); }
-}
-
-function computeIncentives(c:InputCtx, produits:string[]){
-  const seg=segOf(c.tailleEntreprise); const inc:string[]=[];
-  const has=(p:string)=>produits.includes(p);
-  if (seg==="1-50" && has("Essential") && has("Coach")) inc.push("Sikker 3 mois off si souscription <30j");
-  if ((seg==="51-250"||seg==="251-1000") && produits.length>=3) inc.push("-10% global bundle");
-  if (c.tailleEntreprise==="1000+" && has("Advanced") && has("Coach") && has("Academy")) inc.push("-8% multi-pays / -12% si ≥2000 licences");
-  if (["Santé","Éducation"].includes(c.secteur)) inc.push("Academy 3 mois off (pilote)");
-  if (c.filtrageMailExistant) inc.push("Coach + Academy à -15% (complément filtrage)");
+function computeIncentives(c, produits){
+  const seg=segOf(c.tailleEntreprise); const inc=[]; const has=p=>produits.includes(p);
+  if(seg==="1-50" && has("Essential") && has("Coach")) inc.push("Sikker 3 mois off si souscription <30j");
+  if((seg==="51-250"||seg==="251-1000") && produits.length>=3) inc.push("-10% global bundle");
+  if(c.tailleEntreprise==="1000+" && has("Advanced") && has("Coach") && has("Academy")) inc.push("-8% multi-pays / -12% si ≥2000 licences");
+  if(["Santé","Éducation"].includes(c.secteur)) inc.push("Academy 3 mois off (pilote)");
+  if(c.filtrageMailExistant) inc.push("Coach + Academy à -15% (complément filtrage)");
   return inc;
 }
 
-export function scoreAndRecommend(input: InputCtx): Output {
+function scoreAndRecommend(input){
   const c={...input}; const seg=segOf(c.tailleEntreprise); const bundleTarget=BundleTargetBySeg[seg];
-
-  // scores bruts
-  let S:any={Essential:0,Advanced:0,Coach:0,Sikker:0,Academy:0};
-  let R:Record<string,string[]>={Essential:[],Advanced:[],Coach:[],Sikker:[],Academy:[]};
+  let S={Essential:0,Advanced:0,Coach:0,Sikker:0,Academy:0};
+  let R={Essential:[],Advanced:[],Coach:[],Sikker:[],Academy:[]};
   ({score:S.Essential,reasons:R.Essential}=scoreEssential(c));
   ({score:S.Advanced,reasons:R.Advanced}=scoreAdvanced(c));
   ({score:S.Coach,reasons:R.Coach}=scoreCoach(c));
   ({score:S.Sikker,reasons:R.Sikker}=scoreSikker(c));
   ({score:S.Academy,reasons:R.Academy}=scoreAcademy(c));
-
-  // tweaks verticaux
   applyVerticalTweaks(S,R,c);
-
-  // filtrage existant d'abord
   let candidates=Object.keys(S);
-  if (c.filtrageMailExistant){
+  if(c.filtrageMailExistant){
     candidates=candidates.filter(p=>!["Essential","Advanced"].includes(p));
-    R.Essential.push("Retiré: filtrage existant");
-    R.Advanced.push("Retiré: filtrage existant");
+    R.Essential.push("Retiré: filtrage existant"); R.Advanced.push("Retiré: filtrage existant");
   } else {
-    // exclusivité Protect
-    if (S.Advanced > S.Essential){
-      candidates=candidates.filter(p=>p!=="Essential");
-      R.Essential.push("Retiré: Advanced > Essential");
+    if(S.Advanced>S.Essential){candidates=candidates.filter(p=>p!=="Essential");R.Essential.push("Retiré: Advanced > Essential");}
+    else {candidates=candidates.filter(p=>p!=="Advanced");R.Advanced.push("Retiré: Essential ≥ Advanced");}
+  }
+  const onlyHuman=c.painPoints.every(pp=>["Phishing","Fraude","Sensibilisation","Conformité"].includes(pp));
+  if(onlyHuman){
+    if(["1-10","11-50"].includes(c.tailleEntreprise)){
+      if(!candidates.includes("Coach")) candidates.push("Coach"); R.Coach.push("Forcé: Sensibilisation-only ≤50");
+      if(c.contraintesReglementaires && !candidates.includes("Academy")){candidates.push("Academy"); R.Academy.push("Option: Réglementaire ≤50");}
     } else {
-      candidates=candidates.filter(p=>p!=="Advanced");
-      R.Advanced.push("Retiré: Essential ≥ Advanced");
+      if(!candidates.includes("Coach")) candidates.push("Coach");
+      if(!candidates.includes("Academy")) candidates.push("Academy");
+      R.Coach.push("Forcé: Sensibilisation-only ≥51"); R.Academy.push("Forcé: Sensibilisation-only ≥51");
     }
   }
-
-  // sensibilisation only
-  const onlyHuman = c.painPoints.every(pp=>["Phishing","Fraude","Sensibilisation","Conformité"].includes(pp));
-  if (onlyHuman){
-    if (["1-10","11-50"].includes(c.tailleEntreprise)){
-      if (!candidates.includes("Coach")) candidates.push("Coach");
-      R.Coach.push("Forcé: Sensibilisation-only ≤50");
-      if (c.contraintesReglementaires && !candidates.includes("Academy")){
-        candidates.push("Academy"); R.Academy.push("Option: Réglementaire ≤50");
-      }
-    } else {
-      if (!candidates.includes("Coach")) candidates.push("Coach");
-      if (!candidates.includes("Academy")) candidates.push("Academy");
-      R.Coach.push("Forcé: Sensibilisation-only ≥51");
-      R.Academy.push("Forcé: Sensibilisation-only ≥51");
-    }
-  }
-
-  // classement et sélection
   const ranked=candidates.map(p=>({p,s:S[p]})).sort((a,b)=>b.s-a.s);
   let selected=ranked.filter(x=>x.s>0).map(x=>x.p);
-
-  // plafond budget
   let maxProducts=MaxProductsByBudget[c.budget];
-  if (c.tailleEntreprise==="1000+" && c.contraintesReglementaires && c.budget==="Élevé") maxProducts=4;
-
-  // viser bundle target mais respect budget
+  if(c.tailleEntreprise==="1000+" && c.contraintesReglementaires && c.budget==="Élevé") maxProducts=4;
   const need=Math.min(bundleTarget,maxProducts);
   selected=ranked.filter(x=>selected.includes(x.p)).slice(0,need).map(x=>x.p);
-
-  // effort gating
-  const sumEff=(ls:string[])=>ls.reduce((a,p)=>a+(Effort as any)[p],0);
+  const sumEff=ls=>ls.reduce((a,p)=>a+(Effort[p]||0),0);
   let effort=sumEff(selected), thr=ThresholdEffort[seg];
-  if (effort>thr){
-    const withDelta=selected.map(p=>({p,delta:S[p]- (Effort as any)[p]})).sort((a,b)=>a.delta-b.delta);
-    while (effort>thr && withDelta.length){
-      const rm=withDelta.shift()!.p;
-      selected=selected.filter(p=>p!==rm);
-      effort=sumEff(selected);
-      R[rm].push("Retiré: sur-effort");
+  if(effort>thr){
+    const withDelta=selected.map(p=>({p,delta:S[p]-(Effort[p]||0)})).sort((a,b)=>a.delta-b.delta);
+    while(effort>thr && withDelta.length){
+      const rm=withDelta.shift().p; selected=selected.filter(p=>p!==rm); effort=sumEff(selected); R[rm].push("Retiré: sur-effort");
     }
   }
-
-  // confidence
-  const topScores=ranked.map(r=>r.s); const top1=topScores[0]??0; const top2=topScores[1]??0;
-  const gap=Math.max(0,Math.min(10,top1-top2));
+  const topScores=ranked.map(r=>r.s); const top1=topScores[0]||0; const top2=topScores[1]||0; const gap=Math.max(0,Math.min(10,top1-top2));
   let confidence=Math.round(60*(gap/10)+40*(1-Math.min(1,(effort-thr>0?(effort-thr)/thr:0))));
-  if (c.budget==="Faible" && selected.length>2) confidence-=10;
-  confidence=Math.max(0,Math.min(100,confidence));
-
-  // incentives
+  if(c.budget==="Faible" && selected.length>2) confidence-=10; confidence=Math.max(0,Math.min(100,confidence));
   const incentives=computeIncentives(c,selected);
-
-  // mapping labels
-  const labelMap:any={Essential:"Protect Essential", Advanced:"Protect Advanced", Coach:"Coach", Sikker:"Sikker", Academy:"Cyber Academy"};
-
+  const labelMap={Essential:"Protect Essential",Advanced:"Protect Advanced",Coach:"Coach",Sikker:"Sikker",Academy:"Cyber Academy"};
   return {
-    produitsRecommandes: selected.map(p=>labelMap[p]),
-    bundleCible: bundleTarget,
-    scores: Object.fromEntries(Object.entries(S).map(([k,v])=>[labelMap[k], v])),
-    raisons: Object.fromEntries(Object.entries(R).map(([k,v])=>[labelMap[k], [...new Set(v)].slice(0,3)])),
-    confidence,
-    effortTotal: effort,
-    incentives
+    produitsRecommandes:selected.map(p=>labelMap[p]),
+    bundleCible:BundleTargetBySeg[seg],
+    scores:Object.fromEntries(Object.entries(S).map(([k,v])=>[labelMap[k],v])),
+    raisons:Object.fromEntries(Object.entries(R).map(([k,v])=>[labelMap[k],[...new Set(v)].slice(0,3)])),
+    confidence, effortTotal:effort, incentives
   };
 }
+
+// ========= UI =========
+const pains=["Phishing","Fraude","Conformité","Accès partagés","Sensibilisation","Gouvernance","Ransomware","Rotation personnel"];
+const painsWrap=document.getElementById('pains');
+let selectedPains=new Set();
+function renderPainPills(){
+  painsWrap.innerHTML='';
+  pains.forEach(p=>{
+    const el=document.createElement('label');
+    el.className='pill';
+    el.dataset.active=selectedPains.has(p)?'true':'false';
+    el.innerHTML=`<input type="checkbox" ${selectedPains.has(p)?'checked':''} style="display:none">${p}`;
+    el.onclick=()=>{ if(selectedPains.has(p)) selectedPains.delete(p); else selectedPains.add(p); renderPainPills(); };
+    painsWrap.appendChild(el);
+  });
+}
+renderPainPills();
+
+function val(id){return document.getElementById(id).value}
+function ctxFromForm(){
+  return {
+    secteur: val('secteur'),
+    tailleEntreprise: val('taille'),
+    maturiteCyber: val('maturite'),
+    budget: val('budget'),
+    contraintesReglementaires: val('reg')==='Oui',
+    multiSitesOuPrestataires: val('multi')==='Oui',
+    painPoints: Array.from(selectedPains),
+    filtrageMailExistant: val('filtre')==='Oui'
+  };
+}
+
+function heatRow(score){
+  // scale -10..+15 approx → 0..5 cells
+  const norm=Math.max(0,Math.min(5, Math.round((score+10)/5)));
+  let html='<div class="heat">';
+  for(let i=0;i<5;i++) html+=`<div class="cell" data-on="${i<norm?1:0}"></div>`;
+  html+='</div>';
+  return html;
+}
+
+function renderOutput(out){
+  document.getElementById('kBundle').textContent=out.bundleCible;
+  document.getElementById('kEffort').textContent=out.effortTotal.toFixed(1);
+  document.getElementById('kConf').textContent=out.confidence+"%";
+  document.getElementById('kIncent').textContent=out.incentives.length||'–';
+
+  const rec=document.getElementById('recos');
+  rec.innerHTML='';
+  out.produitsRecommandes.forEach(p=>{
+    const tag=document.createElement('div'); tag.className='tag'; tag.textContent=p; rec.appendChild(tag);
+  });
+
+  const scores=document.getElementById('scores');
+  scores.innerHTML='';
+  const entries=Object.entries(out.scores);
+  entries.sort((a,b)=>b[1]-a[1]).forEach(([label,sc])=>{
+    const it=document.createElement('div'); it.className='item';
+    const reasons=(out.raisons[label]||[]).map(x=>`<span class="reason">${x}</span>`).join('');
+    it.innerHTML=`
+      <h3>${label} <span class="muted">• score ${sc}</span></h3>
+      <div class="scorebar"><span style="width:${Math.max(0,Math.min(100,(sc+10)*3))}%"></span></div>
+      <div class="reasons">${reasons||'<span class="hint">Aucune raison enregistrée</span>'}</div>
+      ${heatRow(sc)}
+    `;
+    scores.appendChild(it);
+  });
+}
+
+function run(){
+  const ctx=ctxFromForm();
+  const out=scoreAndRecommend(ctx);
+  renderOutput(out);
+  window.__lastOut=out; // pour copie
+}
+
+function resetForm(){
+  selectedPains.clear(); renderPainPills();
+  document.getElementById('secteur').value='Santé';
+  document.getElementById('taille').value='51-100';
+  document.getElementById('maturite').value='Moyenne';
+  document.getElementById('budget').value='Moyen';
+  document.getElementById('reg').value='Oui';
+  document.getElementById('multi').value='Oui';
+  document.getElementById('filtre').value='Non';
+  document.getElementById('recos').innerHTML='';
+  document.getElementById('scores').innerHTML='';
+  document.getElementById('kBundle').textContent='–';
+  document.getElementById('kEffort').textContent='–';
+  document.getElementById('kConf').textContent='–';
+  document.getElementById('kIncent').textContent='–';
+}
+
+// Presets
+function applyPreset(key){
+  resetForm();
+  if(key==='sante-mid'){
+    document.getElementById('secteur').value='Santé';
+    document.getElementById('taille').value='101-250';
+    document.getElementById('maturite').value='Moyenne';
+    document.getElementById('budget').value='Moyen';
+    document.getElementById('reg').value='Oui';
+    document.getElementById('multi').value='Oui';
+    ['Phishing','Accès partagés','Conformité'].forEach(p=>selectedPains.add(p));
+    renderPainPills();
+  }
+  if(key==='industrie-pti'){
+    document.getElementById('secteur').value='Industrie';
+    document.getElementById('taille').value='11-50';
+    document.getElementById('maturite').value='Faible';
+    document.getElementById('budget').value='Faible';
+    document.getElementById('reg').value='Non';
+    document.getElementById('multi').value='Oui';
+    ['Phishing','Accès partagés'].forEach(p=>selectedPains.add(p));
+    renderPainPills();
+  }
+  if(key==='public-large'){
+    document.getElementById('secteur').value='Administration';
+    document.getElementById('taille').value='1000+';
+    document.getElementById('maturite').value='Élevée';
+    document.getElementById('budget').value='Élevé';
+    document.getElementById('reg').value='Oui';
+    document.getElementById('multi').value='Oui';
+    ['Gouvernance','Sensibilisation'].forEach(p=>selectedPains.add(p));
+    renderPainPills();
+  }
+}
+
+// Wiring
+ document.getElementById('run').onclick=run;
+ document.getElementById('reset').onclick=resetForm;
+ document.getElementById('copy').onclick=()=>{
+   const data={input:ctxFromForm(), output: window.__lastOut||null};
+   navigator.clipboard.writeText(JSON.stringify(data,null,2));
+   alert('Copié dans le presse-papiers !');
+ };
+ document.querySelectorAll('[data-preset]').forEach(btn=>btn.addEventListener('click',e=>applyPreset(btn.dataset.preset)));
+
+ // Boot
+ applyPreset('sante-mid');
+ run();
+</script>
+</body>
+</html>
