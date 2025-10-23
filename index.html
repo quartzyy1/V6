@@ -272,19 +272,70 @@ function scoreAndRecommend(input){
     }
   }
   const ranked=candidates.map(p=>({p,s:S[p]})).sort((a,b)=>b.s-a.s);
+  // --- Sélection initiale (scores > 0) ---
   let selected=ranked.filter(x=>x.s>0).map(x=>x.p);
+
+  // Limites par budget
   let maxProducts=MaxProductsByBudget[c.budget];
   if(c.tailleEntreprise==="1000+" && c.contraintesReglementaires && c.budget==="Élevé") maxProducts=4;
   const need=Math.min(bundleTarget,maxProducts);
   selected=ranked.filter(x=>selected.includes(x.p)).slice(0,need).map(x=>x.p);
+
+  // ✅ Cas spécial : le client a DÉJÀ un filtrage mail et vient pour formation/sensibilisation
+  // Si après sélection il n'y a rien (scores ≤ 0), ensemencer avec Coach (+Academy si pertinent)
+  if(c.filtrageMailExistant && selected.length===0){
+    selected = ["Coach"];
+    R.Coach.push("Forcé: complément au filtrage existant");
+    if((c.contraintesReglementaires || ["51-100","101-250","250-1000","1000+"].includes(c.tailleEntreprise)) && selected.length<need){
+      selected.push("Academy");
+      R.Academy.push("Forcé: sensibilisation/conformité sans Protect");
+    }
+  }
+
+  // 🔒 Règle business : si pas de filtrage existant → TOUJOURS un Protect (Essential ou Advanced)
+  const protectChoice = candidates.includes("Advanced") ? "Advanced" : (candidates.includes("Essential") ? "Essential" : null);
+  if(!c.filtrageMailExistant && protectChoice){
+    if(!selected.includes(protectChoice)){
+      // Ajoute le Protect choisi en priorité
+      selected = [protectChoice, ...selected.filter(p=>p!==protectChoice)];
+      // Si on dépasse le quota, on retire le plus faible NON-Protect
+      if(selected.length>need){
+        const nonProtectRanked = ranked.filter(r=>r.p!==protectChoice && selected.includes(r.p));
+        if(nonProtectRanked.length){
+          const worst = nonProtectRanked[nonProtectRanked.length-1].p; // plus faible score dans la sélection
+          selected = selected.filter(p=>p!==worst);
+          R[worst].push("Retiré: priorité au Protect (pas de filtrage existant)");
+        }
+      }
+      R[protectChoice].push("Forcé: base Protect requise (pas de filtrage existant)");
+    }
+  }
+
+  // Calcul effort et gating — on évite de retirer Protect en premier
   const sumEff=ls=>ls.reduce((a,p)=>a+(Effort[p]||0),0);
   let effort=sumEff(selected), thr=ThresholdEffort[seg];
   if(effort>thr){
-    const withDelta=selected.map(p=>({p,delta:S[p]-(Effort[p]||0)})).sort((a,b)=>a.delta-b.delta);
+    // on ordonne par (score - effort), mais en plaçant le Protect choisi à la fin (donc retiré en dernier)
+    const withDelta=selected
+      .map(p=>({p,delta:S[p]-(Effort[p]||0)}))
+      .sort((a,b)=>{
+        const aProt=(p=>p==="Essential"||p==="Advanced")(a.p);
+        const bProt=(p=>p==="Essential"||p==="Advanced")(b.p);
+        // d'abord non-Protect par delta croissant
+        if(aProt!==bProt) return aProt?1:-1;
+        return a.delta-b.delta;
+      });
     while(effort>thr && withDelta.length){
-      const rm=withDelta.shift().p; selected=selected.filter(p=>p!==rm); effort=sumEff(selected); R[rm].push("Retiré: sur-effort");
+      const rm=withDelta.shift().p;
+      // ne jamais retirer le Protect s'il est le dernier restant à couvrir la règle business
+      if(!c.filtrageMailExistant && (rm==="Essential"||rm==="Advanced") && selected.some(p=>p!==rm && (p==="Essential"||p==="Advanced"))===false){
+        // saute ce retrait, passe au suivant
+        continue;
+      }
+      selected=selected.filter(p=>p!==rm); effort=sumEff(selected); R[rm].push("Retiré: sur-effort");
     }
   }
+
   const topScores=ranked.map(r=>r.s); const top1=topScores[0]||0; const top2=topScores[1]||0; const gap=Math.max(0,Math.min(10,top1-top2));
   let confidence=Math.round(60*(gap/10)+40*(1-Math.min(1,(effort-thr>0?(effort-thr)/thr:0))));
   if(c.budget==="Faible" && selected.length>2) confidence-=10; confidence=Math.max(0,Math.min(100,confidence));
@@ -439,6 +490,9 @@ function runSelfTests(){
   // 2) Filtrage existant retire Protect
   const t2=scoreAndRecommend({secteur:'Santé',tailleEntreprise:'101-250',maturiteCyber:'Élevée',budget:'Élevé',contraintesReglementaires:true,multiSitesOuPrestataires:true,painPoints:['Gouvernance'],filtrageMailExistant:true});
   tests.push({name:'Filtrage existant → pas de Protect', pass: !t2.produitsRecommandes.some(p=>p.startsWith('Protect'))});
+  // 2b) Filtrage existant + human-only ⇒ Coach/Academy présents, aucun Protect
+  const t2b=scoreAndRecommend({secteur:'Éducation',tailleEntreprise:'51-100',maturiteCyber:'Moyenne',budget:'Faible',contraintesReglementaires:true,multiSitesOuPrestataires:false,painPoints:['Sensibilisation','Conformité'],filtrageMailExistant:true});
+  tests.push({name:'Filtrage existant + human-only ≥51 → Coach (+Academy)', pass: t2b.produitsRecommandes.includes('Coach') && !t2b.produitsRecommandes.some(p=>p.startsWith('Protect'))});
   // 3) Sensibilisation only ≥51 force Coach+Academy
   const t3=scoreAndRecommend({secteur:'Éducation',tailleEntreprise:'101-250',maturiteCyber:'Moyenne',budget:'Moyen',contraintesReglementaires:true,multiSitesOuPrestataires:false,painPoints:['Sensibilisation','Conformité'],filtrageMailExistant:false});
   tests.push({name:'Sensibilisation-only ≥51 → Coach + Academy', pass: t3.produitsRecommandes.includes('Coach') && t3.produitsRecommandes.includes('Cyber Academy')});
