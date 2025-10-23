@@ -1,0 +1,445 @@
+/* =========================================================
+   Mailinblack – Scoring & Bundling Engine v2.3 (FR)
+   =========================================================
+   Entrée minimale :
+   {
+     secteur: "Santé" | "Industrie" | "Finance" | "Éducation" | "Administration" | "Commerce" | "BTP" | "Transport" | "Énergie" | "Autre",
+     tailleEntreprise: "1-10" | "11-50" | "51-100" | "101-250" | "250-1000" | "1000+",
+     maturiteCyber: "Faible" | "Moyenne" | "Élevée",
+     budget: "Faible" | "Moyen" | "Élevé",
+     contraintesReglementaires: boolean,  // Oui/Non
+     multiSitesOuPrestataires: boolean,   // Oui/Non
+     painPoints: Array<"Phishing" | "Fraude" | "Conformité" | "Accès partagés" | "Sensibilisation" | "Gouvernance" | "Ransomware" | "Rotation personnel">,
+     filtrageMailExistant: boolean        // Oui/Non
+   }
+   Sortie :
+   {
+     produitsRecommandes: string[],
+     bundleCible: number,                 // 2 pour 1-50 / 3 sinon
+     scores: Record<string, number>,      // scores finaux
+     raisons: Record<string, string[]>,   // 3 bullets max par produit
+     confidence: number,                  // 0-100
+     effortTotal: number,
+     incentives: string[]                 // promos auto
+   }
+*/
+
+// ---------- Utils
+const inArr = (arr: string[], ...vals: string[]) => vals.some(v => arr.includes(v));
+const segOf = (taille: string): "1-50"|"51-250"|"251-1000"|"1000+" => {
+  if (taille === "1-10" || taille === "11-50") return "1-50";
+  if (taille === "51-100" || taille === "101-250") return "51-250";
+  if (taille === "250-1000") return "251-1000";
+  return "1000+";
+};
+
+// ---------- Configs
+const Effort: Record<string, number> = {
+  Essential: 0.5, Coach: 0.5, Sikker: 1.0, Advanced: 1.5, Academy: 1.0, UCyber: 0.8
+};
+
+const ThresholdEffort: Record<string, number> = {
+  "1-50": 2.0, "51-250": 3.0, "251-1000": 3.5, "1000+": 3.5
+};
+
+const MaxProductsByBudget: Record<string, number> = {
+  "Faible": 2, "Moyen": 3, "Élevé": 3
+};
+
+const BundleTargetBySeg: Record<string, number> = {
+  "1-50": 2, "51-250": 3, "251-1000": 3, "1000+": 3
+};
+
+// ---------- Scoreurs bruts (v2.2 + ajustements v2.3)
+function scoreEssential(ctx: any) {
+  const {
+    tailleEntreprise, secteur, maturiteCyber, budget,
+    painPoints, multiSitesOuPrestataires, contraintesReglementaires,
+    filtrageMailExistant
+  } = ctx;
+  let s = 0, reasons: string[] = [];
+
+  if (["1-10","11-50"].includes(tailleEntreprise)) { s += 3; reasons.push("Taille≤50: besoin base simple"); }
+  if (["BTP","Commerce","Transport","Industrie"].includes(secteur)) { s += 2; reasons.push("Secteur volume→base email"); }
+  if (maturiteCyber === "Faible") { s += 2; reasons.push("Maturité faible"); }
+  if (budget === "Faible") { s += 2; reasons.push("Budget contraint"); }
+  if (inArr(painPoints, "Phishing","Fraude")) { s += 1; reasons.push("Phishing/Fraude"); }
+  if (!multiSitesOuPrestataires) { s += 1; reasons.push("Simplicité mono-site"); }
+
+  if (["101-250","250-1000","1000+"].includes(tailleEntreprise)) { s -= 3; reasons.push("Taille≥101: niveau supérieur requis"); }
+  if (maturiteCyber === "Élevée") { s -= 2; reasons.push("Maturité élevée"); }
+  if (contraintesReglementaires) { s -= 1; reasons.push("Contrainte→plutôt Advanced"); }
+  // v2.3 add: pénalité supplémentaire si contraintes & taille≥51
+  if (contraintesReglementaires && ["51-100","101-250","250-1000","1000+"].includes(tailleEntreprise)) {
+    s -= 2; reasons.push("Réglementaire & taille≥51: Essential sous-dimensionné");
+  }
+  if (filtrageMailExistant) { s -= 3; reasons.push("Déjà filtrage mail"); }
+
+  // Nudge segment
+  const seg = segOf(tailleEntreprise);
+  if (seg === "1-50") s += 1;
+  if (seg === "251-1000") s -= 1;
+  if (seg === "1000+") s -= 2;
+
+  return {score: s, reasons};
+}
+
+function scoreAdvanced(ctx: any) {
+  const {
+    tailleEntreprise, secteur, contraintesReglementaires,
+    maturiteCyber, painPoints, multiSitesOuPrestataires,
+    budget, filtrageMailExistant
+  } = ctx;
+  let s = 0, reasons: string[] = [];
+
+  if (["101-250","250-1000","1000+"].includes(tailleEntreprise)) { s += 3; reasons.push("Taille mid/large"); }
+  if (["Santé","Finance","Éducation","Administration","Énergie"].includes(secteur)) { s += 3; reasons.push("Secteur critique"); }
+  if (contraintesReglementaires) { s += 3; reasons.push("Contraintes réglementaires"); }
+  if (maturiteCyber === "Élevée") { s += 2; reasons.push("Maturité élevée"); }
+  if (inArr(painPoints,"Gouvernance","Ransomware")) { s += 2; reasons.push("Gouvernance/Ransomware"); }
+  if (multiSitesOuPrestataires) { s += 1; reasons.push("Multi-sites/Prestataires"); }
+
+  if (["1-10","11-50"].includes(tailleEntreprise)) { s -= 3; reasons.push("Taille≤50: surdimensionné"); }
+  if (budget === "Faible") { s -= 2; reasons.push("Budget faible"); }
+  if (filtrageMailExistant) { s -= 3; reasons.push("Déjà filtrage mail (complément non mail conseillé)"); }
+
+  // Nudge
+  const seg = segOf(tailleEntreprise);
+  if (seg === "51-250") s += 1;
+  if (seg === "251-1000" || seg === "1000+") s += 2;
+
+  // Règle spéciale Finance (v2.2)
+  if (secteur === "Finance") { s += 1; reasons.push("Finance:+1 Advanced (DORA)"); }
+
+  return {score: s, reasons};
+}
+
+function scoreCoach(ctx: any) {
+  const {
+    painPoints, contraintesReglementaires, secteur,
+    maturiteCyber, tailleEntreprise, budget, filtrageMailExistant
+  } = ctx;
+  let s = 0, reasons: string[] = [];
+
+  if (inArr(painPoints,"Phishing","Fraude","Sensibilisation")) { s += 3; reasons.push("Phishing/Fraude/Sensibilisation"); }
+  if (contraintesReglementaires) { s += 3; reasons.push("Conformité"); }
+  if (["Santé","Finance","Administration","Éducation","Commerce","BTP"].includes(secteur)) { s += 2; reasons.push("Secteur prioritaire"); }
+  if (["Moyenne","Élevée"].includes(maturiteCyber)) { s += 2; reasons.push("Maturité adaptée"); }
+  if (!["1-10"].includes(tailleEntreprise)) { s += 1; reasons.push("≥11 employés"); }
+  if (budget === "Moyen") { s += 1; reasons.push("Gateway budget moyen"); }
+  if (secteur === "BTP" || secteur === "Commerce") {
+    if (["1-10","11-50"].includes(tailleEntreprise)) { s += 1; reasons.push("PME terrain"); }
+  }
+  if (filtrageMailExistant) { s += 1; reasons.push("Complément au filtrage existant"); }
+
+  if (budget === "Faible" && tailleEntreprise === "1-10" && !contraintesReglementaires) {
+    s -= 2; reasons.push("TPE budget faible");
+  }
+
+  // Nudges
+  const seg = segOf(tailleEntreprise);
+  if (seg === "51-250" || seg === "251-1000") s += 1;
+  if (["Santé","Administration","Éducation"].includes(secteur)) s += 1;
+
+  return {score: s, reasons};
+}
+
+function scoreSikker(ctx: any) {
+  const {
+    multiSitesOuPrestataires, painPoints, secteur,
+    tailleEntreprise, maturiteCyber, budget
+  } = ctx;
+  let s = 0, reasons: string[] = [];
+
+  if (multiSitesOuPrestataires) { s += 3; reasons.push("Multi-sites/Prestataires"); }
+  if (inArr(painPoints,"Accès partagés","Rotation personnel")) { s += 3; reasons.push("Accès partagés/Rotation"); }
+  if (["Industrie","Commerce","BTP","Éducation","Transport"].includes(secteur)) { s += 2; reasons.push("Secteur accès partagés"); }
+  if (["1-10","11-50","51-100","101-250"].includes(tailleEntreprise)) { s += 2; reasons.push("≤250: IAM light utile"); }
+  if (maturiteCyber === "Moyenne") { s += 1; reasons.push("Maturité moyenne"); }
+  if (budget === "Faible") { s -= 1; reasons.push("Budget faible: prioriser duo"); }
+  if (inArr(painPoints,"Gouvernance")) { s += 1; reasons.push("Gouvernance accès"); }
+
+  // 1000+ : condition prestataires (v2.3)
+  if (tailleEntreprise === "1000+") {
+    s -= 2; reasons.push("1000+: IAM déjà présent");
+    if (multiSitesOuPrestataires) { s += 2; reasons.push("Prestataires: Sikker pertinent"); }
+  }
+
+  // Nudge segment
+  const seg = segOf(tailleEntreprise);
+  if (seg === "51-250" || seg === "251-1000") s += 2;
+  if (seg === "1000+") s += 1;
+
+  // Santé/Public corrélation Protect+Sikker
+  if (["Santé","Administration"].includes(secteur)) { s += 1; reasons.push("Santé/Public:+1"); }
+
+  return {score: s, reasons};
+}
+
+function scoreAcademy(ctx: any) {
+  const {
+    contraintesReglementaires, secteur, maturiteCyber,
+    tailleEntreprise, painPoints, budget, filtrageMailExistant
+  } = ctx;
+  let s = 0, reasons: string[] = [];
+
+  if (contraintesReglementaires) { s += 3; reasons.push("Conformité"); }
+  if (["Finance","Santé","Éducation","Administration","Énergie"].includes(secteur)) { s += 3; reasons.push("Secteur régulé/critique"); }
+  if (["Moyenne","Élevée"].includes(maturiteCyber)) { s += 2; reasons.push("Maturité adaptée"); }
+  if (!["1-10","11-50"].includes(tailleEntreprise)) { s += 2; reasons.push("≥51 employés"); }
+  if (inArr(painPoints,"Conformité","Sensibilisation")) { s += 1; reasons.push("Conformité/Sensibilisation"); }
+  if (filtrageMailExistant) { s += 1; reasons.push("Complément au filtrage existant"); }
+  if (secteur === "Éducation") { s += 1; reasons.push("Éducation:+1"); }
+
+  if (tailleEntreprise === "1-10") { s -= 2; reasons.push("TPE: trop chronophage"); }
+  if (budget === "Faible") { s -= 2; reasons.push("Budget faible"); }
+  if ((secteur === "BTP" || secteur === "Commerce") && ["1-10","11-50"].includes(tailleEntreprise)) {
+    s -= 1; reasons.push("BTP/Commerce≤50: appétence faible");
+  }
+
+  // Nudges
+  const seg = segOf(tailleEntreprise);
+  if (seg !== "1-50") s += 1;
+  if (["Santé","Administration"].includes(secteur)) s += 1;
+
+  return {score: s, reasons};
+}
+
+function scoreUCyber(ctx: any) {
+  const { budget, painPoints, secteur, multiSitesOuPrestataires, contraintesReglementaires, tailleEntreprise } = ctx;
+  let s = 0, reasons: string[] = [];
+
+  if (budget === "Moyen") { s += 2; reasons.push("Budget moyen"); }
+  if (inArr(painPoints,"Phishing","Accès partagés")) { s += 2; reasons.push("Phishing/Accès partagés"); }
+  if (["Commerce","Industrie","BTP"].includes(secteur)) { s += 1; reasons.push("Secteur terrain"); }
+  if (multiSitesOuPrestataires) { s += 1; reasons.push("Multi-sites"); }
+  if (contraintesReglementaires) { s += 1; reasons.push("Conformité"); }
+
+  if (budget === "Faible") { s -= 2; reasons.push("Budget faible"); }
+  if (tailleEntreprise === "1000+") { s -= 2; reasons.push("1000+: bundle light insuffisant"); }
+
+  return {score: s, reasons};
+}
+
+// ---------- Règles spéciales verticales (v2.2)
+function applyVerticalTweaks(scores: any, reasons: any, ctx: any) {
+  const { secteur } = ctx;
+  if (["Santé","Administration"].includes(secteur)) {
+    scores.Coach += 1; reasons.Coach.push("Vertical:+1 Coach");
+    scores.Academy += 1; reasons.Academy.push("Vertical:+1 Academy");
+    scores.Sikker += 1; reasons.Sikker.push("Vertical:+1 Sikker");
+  }
+  if (secteur === "Industrie") {
+    scores.Sikker += 2; reasons.Sikker.push("Industrie:+2 Sikker");
+    scores.Coach += 1; reasons.Coach.push("Industrie:+1 Coach");
+  }
+  if (secteur === "Finance") {
+    scores.Advanced += 1; reasons.Advanced.push("Finance:+1 Advanced");
+    scores.Coach += 1; reasons.Coach.push("Finance:+1 Coach");
+    scores.Academy += 1; reasons.Academy.push("Finance:+1 Academy");
+  }
+  if (secteur === "Éducation") {
+    scores.Academy += 1; reasons.Academy.push("Éducation:+1 Academy");
+    scores.Coach += 1; reasons.Coach.push("Éducation:+1 Coach");
+  }
+  if (secteur === "BTP" || secteur === "Commerce") {
+    scores.Academy -= 1; reasons.Academy.push("BTP/Commerce:-1 Academy");
+    scores.Coach += 1; reasons.Coach.push("BTP/Commerce:+1 Coach");
+  }
+  if (secteur === "Énergie") {
+    scores.Advanced += 1; reasons.Advanced.push("Énergie:+1 Advanced");
+    scores.Academy += 1; reasons.Academy.push("Énergie:+1 Academy");
+  }
+}
+
+// ---------- Incentives auto
+function computeIncentives(ctx: any, produits: string[]) {
+  const seg = segOf(ctx.tailleEntreprise);
+  const inc: string[] = [];
+  const has = (p: string) => produits.includes(p);
+
+  if (seg === "1-50" && has("Essential") && has("Coach")) inc.push("Sikker 3 mois off si souscription <30j");
+  if ((seg === "51-250" || seg === "251-1000") && produits.length >= 3) inc.push("-10% global bundle");
+  if (ctx.tailleEntreprise === "1000+" && has("Advanced") && has("Coach") && has("Academy")) inc.push("-8% multi-pays / -12% si ≥2000 licences");
+  if (["Santé","Éducation"].includes(ctx.secteur)) inc.push("Academy 3 mois off (pilote)");
+  if (ctx.filtrageMailExistant) inc.push("Coach + Academy à -15% (complément filtrage)");
+
+  return inc;
+}
+
+// ---------- Sélection finale + arbitrages
+export function scoreAndRecommend(input: any) {
+  const ctx = {...input};
+  const seg = segOf(ctx.tailleEntreprise);
+  const bundleTarget = BundleTargetBySeg[seg];
+
+  // 1) Scores bruts
+  let S = {
+    Essential: 0, Advanced: 0, Coach: 0, Sikker: 0, Academy: 0, UCyber: 0
+  };
+  let R: Record<string, string[]> = {
+    Essential: [], Advanced: [], Coach: [], Sikker: [], Academy: [], UCyber: []
+  };
+
+  ({score: S.Essential, reasons: R.Essential} = scoreEssential(ctx));
+  ({score: S.Advanced,  reasons: R.Advanced}  = scoreAdvanced(ctx));
+  ({score: S.Coach,     reasons: R.Coach}     = scoreCoach(ctx));
+  ({score: S.Sikker,    reasons: R.Sikker}    = scoreSikker(ctx));
+  ({score: S.Academy,   reasons: R.Academy}   = scoreAcademy(ctx));
+  ({score: S.UCyber,    reasons: R.UCyber}    = scoreUCyber(ctx));
+
+  // 2) Tweaks verticaux
+  applyVerticalTweaks(S, R, ctx);
+
+  // 3) Garde-fou Filtrage d'abord
+  let candidates = ["Essential","Advanced","Coach","Sikker","Academy","UCyber"];
+  if (ctx.filtrageMailExistant) {
+    candidates = candidates.filter(p => !["Essential","Advanced"].includes(p));
+    R.Essential.push("Retiré: filtrage existant");
+    R.Advanced.push("Retiré: filtrage existant");
+  } else {
+    // 4) Exclusivité Protect (si pas de filtrage existant)
+    if (S.Advanced > S.Essential) {
+      candidates = candidates.filter(p => p !== "Essential");
+      R.Essential.push("Retiré: Advanced > Essential");
+    } else {
+      candidates = candidates.filter(p => p !== "Advanced");
+      R.Advanced.push("Retiré: Essential ≥ Advanced");
+    }
+  }
+
+  // 5) Cas “Sensibilisation only”
+  const onlyHuman = ctx.painPoints.every((pp: string) =>
+    ["Phishing","Fraude","Sensibilisation","Conformité"].includes(pp)
+  );
+  if (onlyHuman) {
+    if (["1-10","11-50"].includes(ctx.tailleEntreprise)) {
+      // ≤50: Coach forcé, Academy option si Reglementaire
+      if (!candidates.includes("Coach")) candidates.push("Coach");
+      R.Coach.push("Forcé: Sensibilisation-only ≤50");
+      if (ctx.contraintesReglementaires && !candidates.includes("Academy")) {
+        candidates.push("Academy");
+        R.Academy.push("Option: Réglementaire ≤50");
+      }
+    } else {
+      if (!candidates.includes("Coach")) candidates.push("Coach");
+      if (!candidates.includes("Academy")) candidates.push("Academy");
+      R.Coach.push("Forcé: Sensibilisation-only ≥51");
+      R.Academy.push("Forcé: Sensibilisation-only ≥51");
+    }
+  }
+
+  // 6) Classement par score
+  const ranked = candidates
+    .map(p => ({p, s: S[p as keyof typeof S]}))
+    .sort((a,b) => b.s - a.s);
+
+  // 7) UCyber = alternatif (pas en plus de Coach+Sikker)
+  let selected = ranked.filter(x => x.s > 0).map(x => x.p);
+  if (selected.includes("UCyber") && (selected.includes("Coach") || selected.includes("Sikker"))) {
+    selected = selected.filter(p => p !== "UCyber");
+    R.UCyber.push("Retiré: doublon avec Coach/Sikker");
+  }
+
+  // 8) Plafond par budget
+  let maxProducts = MaxProductsByBudget[ctx.budget];
+  if (ctx.tailleEntreprise === "1000+" && ctx.contraintesReglementaires && ctx.budget === "Élevé") {
+    maxProducts = 4;
+  }
+
+  // 9) Compléter/Reducer vs bundleTarget et effort
+  const need = Math.min(bundleTarget, maxProducts);
+  // garder top 'need' par score
+  selected = ranked
+    .filter(x => selected.includes(x.p))
+    .slice(0, need)
+    .map(x => x.p);
+
+  // 10) Effort gating
+  const sumEffort = (list: string[]) => list.reduce((acc, p) => acc + (Effort[p] || 0), 0);
+  let effort = sumEffort(selected);
+  const thr = ThresholdEffort[seg];
+  if (effort > thr) {
+    // retirer le produit au plus faible (score - effort)
+    const withDelta = selected.map(p => ({p, delta: (S[p as keyof typeof S] || 0) - (Effort[p]||0)}))
+                              .sort((a,b) => a.delta - b.delta);
+    while (effort > thr && withDelta.length > 0) {
+      const rm = withDelta.shift()!.p;
+      selected = selected.filter(p => p !== rm);
+      effort = sumEffort(selected);
+      R[rm].push("Retiré: sur-effort déploiement");
+    }
+  }
+
+  // 11) Confidence score
+  const topScores = ranked.map(r => r.s);
+  const top1 = topScores[0] ?? 0;
+  const top2 = topScores[1] ?? 0;
+  // normalisation simple : clamp écart 0..10
+  const gap = Math.max(0, Math.min(10, top1 - top2));
+  let confidence = Math.round(60 * (gap/10) + 40 * (1 - Math.min(1, (effort - thr > 0 ? (effort-thr)/thr : 0))));
+  if (ctx.budget === "Faible" && selected.length > 2) confidence -= 10;
+  confidence = Math.max(0, Math.min(100, confidence));
+
+  // 12) Incentives
+  const incentives = computeIncentives(ctx, selected);
+
+  // 13) Raison (3 bullets max / produit)
+  const raisons: Record<string, string[]> = {};
+  for (const p of ["Essential","Advanced","Coach","Sikker","Academy","UCyber"]) {
+    const arr = R[p] || [];
+    // ne garder que 3 bullets les plus parlantes
+    raisons[p] = [...new Set(arr)].slice(0,3);
+  }
+
+  // 14) Sortie finale (labels “produits” human-friendly)
+  const labelMap: Record<string,string> = {
+    Essential: "Protect Essential",
+    Advanced:  "Protect Advanced",
+    Coach:     "Coach",
+    Sikker:    "Sikker",
+    Academy:   "Cyber Academy",
+    UCyber:    "U-Cyber (bundle light)"
+  };
+
+  return {
+    produitsRecommandes: selected.map(p => labelMap[p]),
+    bundleCible: bundleTarget,
+    scores: Object.fromEntries(Object.entries(S).map(([k,v]) => [labelMap[k], v])),
+    raisons: Object.fromEntries(Object.entries(raisons).map(([k,v]) => [labelMap[k], v])),
+    confidence,
+    effortTotal: effort,
+    incentives
+  };
+}
+
+// ----------------------
+// Exemple d’appel :
+// const out = scoreAndRecommend({
+//   secteur: "Santé",
+//   tailleEntreprise: "101-250",
+//   maturiteCyber: "Moyenne",
+//   budget: "Moyen",
+//   contraintesReglementaires: true,
+//   multiSitesOuPrestataires: true,
+//   painPoints: ["Phishing","Accès partagés","Conformité"],
+//   filtrageMailExistant: false
+// });
+// console.log(out);
+/*
+Renvoie typiquement :
+{
+  produitsRecommandes: ["Protect Advanced","Coach","Sikker","Cyber Academy"],
+  bundleCible: 3,
+  scores: {...},
+  raisons: {
+    "Protect Advanced": ["Taille mid/large","Secteur critique","Contraintes réglementaires"],
+    "Coach": ["Phishing/Fraude/Sensibilisation","Conformité","Secteur prioritaire"],
+    "Sikker": ["Multi-sites/Prestataires","Accès partagés/Rotation","≤250: IAM light utile"],
+    "Cyber Academy": ["Conformité","Secteur régulé/critique","≥51 employés"]
+  },
+  confidence: 78,
+  effortTotal: 4.0,
+  incentives: ["-10% global bundle","Academy 3 mois off (pilote)"]
+}
+*/
