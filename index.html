@@ -3,32 +3,29 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Mailinblack • Recommandateur de Bundles v2.3</title>
+  <title>Mailinblack • Recommandateur de Bundles v2.4</title>
   <style>
-    :root{
-      --bg:#0f1226;--card:#14183a;--ink:#eef1ff;--muted:#9aa3c7;--accent:#8b9bff;--good:#00d19a;--warn:#ffb547;--bad:#ff6b6b;
-      --chip:#2a2f59;--chip-on:#3a4080;--border:#2a2f59;--shadow:0 10px 30px rgba(0,0,0,.35)
-    }
-    *{box-sizing:border-box}
-    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu;line-height:1.35;background:radial-gradient(1200px 600px at 15% -10%,#1b2253,transparent),radial-gradient(1000px 800px at 90% -10%,#1c2740,transparent),var(--bg);color:var(--ink)}
-    h1{font-size:clamp(20px,2.6vw,32px);margin:0 0 6px}
-    h2{font-size:18px;margin:0 0 12px;color:var(--ink)}
-    p{color:var(--muted)}
-    .wrap{max-width:1100px;margin:32px auto;padding:0 16px}
-    .grid{display:grid;gap:16px;grid-template-columns:1.15fr 1fr}
-    @media (max-width:980px){.grid{grid-template-columns:1fr}}
-    .card{background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.00));border:1px solid var(--border);border-radius:18px;padding:16px;box-shadow:var(--shadow)}
-    .inputs{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    :root{--bg:#0f1226;--card:#14183a;--ink:#eef1ff;--muted:#9aa3c7;--accent:#8b9bff;--good:#00d19a;--warn:#ffb547;--bad:#ff6b6b;--chip:#2a2f59;--chip-on:#3a4080;--border:#2a2f59;--shadow:0 10px 30px rgba(0,0,0,.35)}
+    *{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#0b0e21,#0f1226);color:var(--ink);font:14px/1.35 system-ui,Segoe UI,Roboto,Helvetica,Arial}
+    .wrap{max-width:1100px;margin:20px auto;padding:0 14px}
+    h1{margin:0 0 6px;font-size:22px}
+    h2{margin:0 0 10px;font-size:18px}
+    .grid{display:grid;grid-template-columns:1.1fr 1fr;gap:14px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:16px}
+    .inputs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
     .inputs .full{grid-column:1/-1}
-    label{font-size:13px;color:var(--muted);display:block;margin:4px 0}
-    select,button,.pill{appearance:none;border:1px solid var(--border);background:#0f1331;color:var(--ink);padding:10px 12px;border-radius:12px;width:100%}
-    select:focus,button:focus{outline:2px solid var(--accent)}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    .pill{display:inline-flex;gap:8px;align-items:center;cursor:pointer;border-color:#1f2450;background:var(--chip)}
-    .pill[data-active="true"]{background:var(--chip-on);border-color:var(--accent)}
-    .pill input{accent-color:var(--accent)}
+    label{display:block;margin:4px 0 6px;color:var(--muted);font-size:12px}
+    select{width:100%;background:#111536;border:1px solid #2a2f59;color:var(--ink);padding:10px;border-radius:10px}
+
+    /* Pills (pain points) */
+    .row{display:flex;flex-wrap:wrap;gap:8px}
+    .pill{display:inline-flex;gap:8px;align-items:center;cursor:pointer;border:1px solid #1f2450;background:var(--chip);padding:10px 12px;border-radius:12px;color:var(--ink);user-select:none;transition:transform .02s ease, background .15s ease, border-color .15s ease}
+    .pill:active{transform:translateY(1px)}
+    .pill[aria-pressed="true"]{background:var(--chip-on);border-color:var(--accent)}
+    .pill:focus{outline:2px solid var(--accent);outline-offset:2px}
+
     .muted{color:var(--muted)}
-    .btn{background:linear-gradient(180deg,#4b59ff,#7a86ff);border:none;color:white;font-weight:600;cursor:pointer}
+    .btn{background:linear-gradient(180deg,#4b59ff,#7a86ff);border:none;color:white;font-weight:600;cursor:pointer;border-radius:10px;padding:10px 12px}
     .btn.secondary{background:#1a1f46;border:1px solid #2a3175;color:#c6cdff}
     .btn.ghost{background:transparent;border:1px dashed #3a4080;color:#c6cdff}
     .btn:active{transform:translateY(1px)}
@@ -52,12 +49,16 @@
     .hint{font-size:12px;color:var(--muted)}
     .footer{margin-top:20px;color:var(--muted);font-size:12px}
     .preset{display:flex;flex-wrap:wrap;gap:8px}
+    .tests{margin-top:14px}
+    .test{display:inline-block;border:1px solid #2a3175;background:#141a3f;color:#c6cdff;border-radius:999px;padding:6px 10px;margin:4px 6px}
+    .test[data-pass="true"]{border-color:#2d7a6a;background:#0f2a26;color:#8fe1cf}
+    .test[data-pass="false"]{border-color:#7a2d2d;background:#2a0f0f;color:#ffb3b3}
   </style>
 </head>
 <body>
   <div class="wrap">
     <div style="margin-bottom:16px">
-      <h1>🔮 Recommandateur de Bundles – Mailinblack v2.3</h1>
+      <h1>🔮 Recommandateur de Bundles – Mailinblack v2.4</h1>
       <p class="muted">Sélectionne le contexte client, clique sur <b>Recommander</b> et obtiens un bundle <i>expliqué</i> (scores, raisons, effort, incentives). Version démo autonome – pas de dépendances.</p>
     </div>
 
@@ -97,7 +98,7 @@
           <div class="full">
             <label>Pain points (sélection multiple)</label>
             <div class="row" id="pains"></div>
-            <div class="hint">Astuce : clique pour (dé)sélectionner.</div>
+            <div class="hint">Astuce : clique pour (dé)sélectionner. Espace/Entrée = clavier.</div>
           </div>
           <div class="full">
             <label>Filtrage mail existant</label>
@@ -133,10 +134,15 @@
 
         <h3 style="margin-top:14px">Détail des scores</h3>
         <div class="list" id="scores"></div>
+
+        <div class="tests">
+          <button class="btn secondary" id="runTests">🧪 Lancer les auto-tests</button>
+          <div id="testsOut"></div>
+        </div>
       </div>
     </div>
 
-    <div class="footer">v2.3 – Logique : exclusivité Essential/Advanced, plafond par budget, gating par effort, Sikker conditionnel prestataires (1000+), forçages sensibilisation.</div>
+    <div class="footer">v2.4 – Fix : CSS nettoyé, pastilles cliquables accessibles, JS corrigé. Logique : exclusivité Essential/Advanced, plafond par budget, gating par effort, Sikker conditionnel prestataires (1000+), forçages sensibilisation.</div>
   </div>
 
 <script>
@@ -254,7 +260,7 @@ function scoreAndRecommend(input){
     if(S.Advanced>S.Essential){candidates=candidates.filter(p=>p!=="Essential");R.Essential.push("Retiré: Advanced > Essential");}
     else {candidates=candidates.filter(p=>p!=="Advanced");R.Advanced.push("Retiré: Essential ≥ Advanced");}
   }
-  const onlyHuman=c.painPoints.every(pp=>["Phishing","Fraude","Sensibilisation","Conformité"].includes(pp));
+  const onlyHuman=c.painPoints.length>0 && c.painPoints.every(pp=>["Phishing","Fraude","Sensibilisation","Conformité"].includes(pp));
   if(onlyHuman){
     if(["1-10","11-50"].includes(c.tailleEntreprise)){
       if(!candidates.includes("Coach")) candidates.push("Coach"); R.Coach.push("Forcé: Sensibilisation-only ≤50");
@@ -294,18 +300,21 @@ function scoreAndRecommend(input){
 }
 
 // ========= UI =========
-const pains=["Phishing","Fraude","Conformité","Accès partagés","Sensibilisation","Gouvernance","Ransomware","Rotation personnel"];
+const pains=["Phishing","Fraude","Conformité","Accès partagés","Sensibilisation","Gouvernance","Ransomware","Rotation personnel"]; 
 const painsWrap=document.getElementById('pains');
 let selectedPains=new Set();
 function renderPainPills(){
   painsWrap.innerHTML='';
   pains.forEach(p=>{
-    const el=document.createElement('label');
-    el.className='pill';
-    el.dataset.active=selectedPains.has(p)?'true':'false';
-    el.innerHTML=`<input type="checkbox" ${selectedPains.has(p)?'checked':''} style="display:none">${p}`;
-    el.onclick=()=>{ if(selectedPains.has(p)) selectedPains.delete(p); else selectedPains.add(p); renderPainPills(); };
-    painsWrap.appendChild(el);
+    const btn=document.createElement('button');
+    btn.type='button';
+    btn.className='pill';
+    btn.setAttribute('aria-pressed', selectedPains.has(p)?'true':'false');
+    btn.setAttribute('aria-label', p);
+    btn.textContent=p;
+    btn.onclick=()=>{ if(selectedPains.has(p)) selectedPains.delete(p); else selectedPains.add(p); renderPainPills(); };
+    btn.onkeydown=(e)=>{ if(e.key===' '||e.key==='Enter'){ e.preventDefault(); btn.click(); } };
+    painsWrap.appendChild(btn);
   });
 }
 renderPainPills();
@@ -420,6 +429,32 @@ function applyPreset(key){
   }
 }
 
+// ====== Auto-tests (sanity) ======
+function runSelfTests(){
+  const out=document.getElementById('testsOut'); out.innerHTML='';
+  const tests=[];
+  // 1) Exclusivité Essential/Advanced
+  const t1=scoreAndRecommend({secteur:'Industrie',tailleEntreprise:'11-50',maturiteCyber:'Faible',budget:'Faible',contraintesReglementaires:false,multiSitesOuPrestataires:false,painPoints:['Phishing'],filtrageMailExistant:false});
+  tests.push({name:'Exclusivité Protect (≤50 → Essential, pas Advanced)', pass: t1.produitsRecommandes.includes('Protect Essential') && !t1.produitsRecommandes.includes('Protect Advanced')});
+  // 2) Filtrage existant retire Protect
+  const t2=scoreAndRecommend({secteur:'Santé',tailleEntreprise:'101-250',maturiteCyber:'Élevée',budget:'Élevé',contraintesReglementaires:true,multiSitesOuPrestataires:true,painPoints:['Gouvernance'],filtrageMailExistant:true});
+  tests.push({name:'Filtrage existant → pas de Protect', pass: !t2.produitsRecommandes.some(p=>p.startsWith('Protect'))});
+  // 3) Sensibilisation only ≥51 force Coach+Academy
+  const t3=scoreAndRecommend({secteur:'Éducation',tailleEntreprise:'101-250',maturiteCyber:'Moyenne',budget:'Moyen',contraintesReglementaires:true,multiSitesOuPrestataires:false,painPoints:['Sensibilisation','Conformité'],filtrageMailExistant:false});
+  tests.push({name:'Sensibilisation-only ≥51 → Coach + Academy', pass: t3.produitsRecommandes.includes('Coach') && t3.produitsRecommandes.includes('Cyber Academy')});
+  // 4) Effort gating (1-50 ne doit pas dépasser 2 produits)
+  const t4=scoreAndRecommend({secteur:'Commerce',tailleEntreprise:'11-50',maturiteCyber:'Moyenne',budget:'Moyen',contraintesReglementaires:false,multiSitesOuPrestataires:true,painPoints:['Phishing','Accès partagés','Fraude'],filtrageMailExistant:false});
+  tests.push({name:'1-50 → max 2 produits (plafond effort/budget)', pass: t4.produitsRecommandes.length<=2});
+  // 5) 1000+ avec contraintes/budget élevé peut aller à 4 produits
+  const t5=scoreAndRecommend({secteur:'Administration',tailleEntreprise:'1000+',maturiteCyber:'Élevée',budget:'Élevé',contraintesReglementaires:true,multiSitesOuPrestataires:true,painPoints:['Gouvernance','Ransomware','Sensibilisation'],filtrageMailExistant:false});
+  tests.push({name:'1000+ contraint/Élevé → 3-4 produits possibles', pass: t5.produitsRecommandes.length>=3});
+
+  // Render tests
+  tests.forEach(t=>{
+    const el=document.createElement('div'); el.className='test'; el.dataset.pass=t.pass; el.textContent=(t.pass?'✅ ':'❌ ')+t.name; out.appendChild(el);
+  });
+}
+
 // Wiring
  document.getElementById('run').onclick=run;
  document.getElementById('reset').onclick=resetForm;
@@ -429,8 +464,9 @@ function applyPreset(key){
    alert('Copié dans le presse-papiers !');
  };
  document.querySelectorAll('[data-preset]').forEach(btn=>btn.addEventListener('click',e=>applyPreset(btn.dataset.preset)));
+ document.getElementById('runTests').onclick=runSelfTests;
 
- // Boot
+ // Boot (preset + première reco)
  applyPreset('sante-mid');
  run();
 </script>
